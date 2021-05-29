@@ -4,7 +4,7 @@ import uuid
 import os
 import shutil
 from functools import partial
-from typing import Any, List, Optional, Text, Union
+from typing import Any, List, Optional, Text, Union, Dict
 
 import questionary
 
@@ -58,7 +58,7 @@ def create_http_input_channels(
         return [_create_single_channel(c, k) for c, k in all_credentials.items()]
 
 
-def _create_single_channel(channel, credentials) -> Any:
+def _create_single_channel(channel: Text, credentials: Dict[Text, Any]) -> Any:
     from rasa.core.channels import BUILTIN_CHANNELS
 
     if channel in BUILTIN_CHANNELS:
@@ -80,7 +80,7 @@ def _create_single_channel(channel, credentials) -> Any:
             )
 
 
-def _create_app_without_api(cors: Optional[Union[Text, List[Text]]] = None):
+def _create_app_without_api(cors: Optional[Union[Text, List[Text]]] = None) -> Sanic:
     app = Sanic(__name__, configure_logging=False)
     server.add_root_route(app)
     server.configure_cors(app, cors)
@@ -101,7 +101,7 @@ def configure_app(
     log_file: Optional[Text] = None,
     conversation_id: Optional[Text] = uuid.uuid4().hex,
     bridge: bool = False,
-):
+) -> Sanic:
     """Run the agent."""
 
     rasa.core.utils.configure_file_logging(logger, log_file)
@@ -126,8 +126,7 @@ def configure_app(
     if logger.isEnabledFor(logging.DEBUG):
         rasa.core.utils.list_routes(app)
 
-    # configure async loop logging
-    async def configure_async_logging():
+    async def configure_async_logging() -> None:
         if logger.isEnabledFor(logging.DEBUG):
             rasa.utils.io.enable_async_loop_debugging(asyncio.get_event_loop())
 
@@ -135,7 +134,7 @@ def configure_app(
 
     if "cmdline" in {c.name() for c in input_channels}:
 
-        async def run_cmdline_io(running_app: Sanic):
+        async def run_cmdline_io(running_app: Sanic) -> None:
             """Small wrapper to shut down the server once cmd io is done."""
             await asyncio.sleep(1)  # allow server to start
 
@@ -241,7 +240,7 @@ def serve_application(
     ssl_password: Optional[Text] = None,
     conversation_id: Optional[Text] = uuid.uuid4().hex,
     bridge: bool = False,
-):
+) -> None:
     """Run the API entrypoint."""
 
     if not channel and not credentials:
@@ -311,12 +310,12 @@ async def load_agent_on_start(
     remote_storage: Optional[Text],
     app: Sanic,
     loop: AbstractEventLoop,
-):
+) -> Agent:
     """Load an agent.
 
     Used to be scheduled on server start
-    (hence the `app` and `loop` arguments)."""
-
+    (hence the `app` and `loop` arguments).
+    """
     # noinspection PyBroadException
     try:
         with model.get_model(model_path) as unpacked_model:
@@ -347,7 +346,8 @@ async def load_agent_on_start(
         )
     except Exception as e:
         rasa.shared.utils.io.raise_warning(
-            f"The model at '{model_path}' could not be loaded. " f"Error: {e}"
+            f"The model at '{model_path}' could not be loaded. "
+            f"Error: {type(e)}: {e}"
         )
         app.agent = None
 
@@ -383,12 +383,12 @@ async def close_resources(app: Sanic, _: AbstractEventLoop) -> None:
 
     event_broker = current_agent.tracker_store.event_broker
     if event_broker:
-        if asyncio.iscoroutinefunction(event_broker.close):
+        if not asyncio.iscoroutinefunction(event_broker.close):
             rasa.shared.utils.io.raise_deprecation_warning(
-                f"The method '{EventBroker.__name__}.{EventBroker.close.__name__} was "
+                f"The method '{EventBroker.__name__}.{EventBroker.close.__name__}' was "
                 f"changed to be asynchronous. Please adapt your custom event broker "
                 f"accordingly. Support for synchronous implementations will be removed "
-                f"in Rasa Open Source 2.2.0."
+                f"in Rasa Open Source 3.0.0."
             )
             event_broker.close()
         else:
